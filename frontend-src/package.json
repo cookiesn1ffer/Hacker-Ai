@@ -1,0 +1,23 @@
+{
+  "name": "hacker-ai-console",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "vite build", "check": "tsc --noEmit" },
+  "dependencies": {
+    "dompurify": "^3.2.0",
+    "lucide-react": "^0.453.0",
+    "marked": "^15.0.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.3",
+    "@types/react": "^19.2.1",
+    "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tailwindcss": "^4.1.14",
+    "tw-animate-css": "^1.4.0",
+    "typescript": "5.6.3",
+    "vite": "^7.1.7"
+  }
+}

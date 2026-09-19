@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+sqlalchemy>=2.0.36
+pydantic>=2.9
+pydantic-settings
+python-dotenv
+httpx
+markdown2
+python-multipart

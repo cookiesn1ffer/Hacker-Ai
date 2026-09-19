@@ -1,0 +1,20 @@
+{
+  "active": "lmstudio",
+  "providers": {
+    "ollama": {
+      "base_url": "http://localhost:11434/v1",
+      "api_key": "ollama",
+      "model": "llama3.1"
+    },
+    "lmstudio": {
+      "base_url": "http://localhost:1234/v1",
+      "model": "qwythos-9b-claude-mythos-5-1m-uncensored-heretic",
+      "api_key": "lm-studio"
+    },
+    "opencode-deepseek": {
+      "base_url": "https://opencode.ai/zen/v1",
+      "model": "deepseek-v4.1-flash",
+      "api_key": "oc_sk_98d7bf1da5f9_NW9UjwPK5T7txPqpc1I6QFRZmE2rlyqS"
+    }
+  }
+}
