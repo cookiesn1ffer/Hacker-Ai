@@ -265,7 +265,12 @@ h1 { color: #e8f0ed; font-size: clamp(26px, 3.2vw, 35px); line-height: 1.05; let
 .md strong { color: #e4f0e5; font-weight: 700; } .md em { font-style: italic; } .md hr { border: 0; border-top: 1px solid var(--line); margin: 1em 0; }
 
 /* chat: fixed-height pane, log scrolls internally */
-.chat-layout { height: calc(100vh - 230px); min-height: 480px; max-height: 900px; }
+.chat-layout { height: calc(100vh - 350px); min-height: 460px; max-height: 900px; }
 .chat-panel { min-height: 0; height: 100%; overflow: hidden; }
 .chat-messages { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .chat-sidebar { min-height: 0; overflow-y: auto; }
+
+.ctx-meter { color: var(--muted); }
+.link-button { background: none; border: 0; padding: 0; color: var(--muted); font: inherit; text-decoration: underline; cursor: pointer; }
+.link-button:hover { color: var(--text); }
+.composer-foot > span { min-width: 0; }

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     llm_api_key: str = "not-needed"          # local servers usually ignore this
     llm_model: str = "llama3.1"              # whatever model tag your server has loaded
     llm_temperature: float = 0.4
+    # Set this to the Context Length your model is loaded with in LM Studio /
+    # Ollama. The app trims history and scan output to fit under it, so a long
+    # session degrades gracefully instead of overflowing mid-work.
+    llm_context_tokens: int = 8192
+    llm_reply_reserve_tokens: int = 1024
     llm_system_prompt: str = (
         "You are the AI copilot embedded in Hacker-AI, a personal, self-hosted "
         "pentesting workbench used by an authorized security tester. Answer as "

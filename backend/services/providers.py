@@ -66,7 +66,7 @@ def get_active() -> dict:
     return {"name": data["active"], **data["providers"][data["active"]]}
 
 
-def upsert(name: str, base_url: str, model: str, api_key: str | None) -> None:
+def upsert(name: str, base_url: str, model: str, api_key: str | None, context_tokens: int | None = None) -> None:
     with _lock:
         data = _load()
         existing = data["providers"].get(name, {})
@@ -76,6 +76,8 @@ def upsert(name: str, base_url: str, model: str, api_key: str | None) -> None:
             # None / "***" means "keep the stored key"
             "api_key": existing.get("api_key", "") if api_key in (None, "***") else api_key,
         }
+        if context_tokens:
+            data["providers"][name]["context_tokens"] = int(context_tokens)
         _save(data)
 
 

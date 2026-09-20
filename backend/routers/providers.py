@@ -13,6 +13,7 @@ class ProviderIn(BaseModel):
     base_url: str
     model: str
     api_key: str | None = None
+    context_tokens: int | None = None
 
 
 @router.get("")
@@ -22,7 +23,7 @@ def list_providers():
 
 @router.put("")
 def save_provider(body: ProviderIn):
-    providers.upsert(body.name, body.base_url, body.model, body.api_key)
+    providers.upsert(body.name, body.base_url, body.model, body.api_key, body.context_tokens)
     return {"ok": True}
 
 

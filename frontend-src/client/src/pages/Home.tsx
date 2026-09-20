@@ -19,9 +19,10 @@ type Engagement = { id: number; name: string; kind: Kind; scope_notes: string; c
 type Target = { id: number; engagement_id: number; value: string; notes: string; created_at: string };
 type ToolRun = { id: number; target_id: number; tool: string; args: string; output: string; exit_code: number; started_at: string; finished_at: string | null };
 type Finding = { id: number; engagement_id: number; title: string; severity: Severity; status: FindingStatus; description: string; evidence: string; remediation: string; created_at: string };
-type Provider = { name: string; model: string; base_url: string; hasKey: boolean; state: "active" | "ready" | "offline"; latency: string };
+type Provider = { name: string; model: string; base_url: string; context_tokens?: number; hasKey: boolean; state: "active" | "ready" | "offline"; latency: string };
 type ChatMessage = { role: "user" | "assistant"; content: string; created_at: string; error?: boolean };
-type ProviderResponse = { active: string; providers: Record<string, { base_url: string; api_key: string; model: string }> };
+type ProviderResponse = { active: string; providers: Record<string, { base_url: string; api_key: string; model: string; context_tokens?: number }> };
+type CtxInfo = { used?: number; budget?: number; tokens?: number; source: string; note: string; dropped_turns?: number };
 
 const SEVERITIES: Severity[] = ["critical", "high", "medium", "low", "info"];
 const STATUSES: FindingStatus[] = ["open", "verified", "fixed", "wontfix"];
@@ -130,6 +131,7 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [loadingChat, setLoadingChat] = useState(false);
+  const [ctxInfo, setCtxInfo] = useState<CtxInfo | null>(null);
   const [runningTarget, setRunningTarget] = useState<number | null>(null);
   const [scopeDraft, setScopeDraft] = useState("");
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
@@ -157,7 +159,7 @@ export default function Home() {
     const data = await api<ProviderResponse>("/api/providers");
     setActiveProvider(data.active);
     setProviders((prev) => Object.entries(data.providers).map(([name, p]) => ({
-      name, model: p.model, base_url: p.base_url, hasKey: !!p.api_key,
+      name, model: p.model, base_url: p.base_url, context_tokens: p.context_tokens, hasKey: !!p.api_key,
       state: name === data.active ? "active" : prev.find((x) => x.name === name)?.state === "offline" ? "offline" : "ready",
       latency: prev.find((x) => x.name === name)?.latency ?? "—",
     })));
@@ -317,6 +319,24 @@ export default function Home() {
     } catch (err) { notify(errText(err), true); }
   };
 
+  const refreshCtx = useCallback(async () => {
+    try {
+      const c = await api<{ tokens: number; source: string; note: string }>("/api/chat/context");
+      setCtxInfo((prev) => ({ ...(prev ?? {}), budget: c.tokens, source: c.source, note: c.note, used: prev?.used }));
+    } catch { /* indicator is optional */ }
+  }, []);
+  useEffect(() => { refreshCtx(); }, [refreshCtx, activeProvider]);
+
+  const clearChat = async () => {
+    if (!activeId || !window.confirm("Clear this engagement's chat history? Findings, targets and scans are kept.")) return;
+    try {
+      await api(`/api/chat/history?engagement_id=${activeId}`, { method: "DELETE" });
+      setChat([]);
+      setCtxInfo((c) => (c ? { ...c, used: undefined, dropped_turns: 0 } : c));
+      notify("Chat cleared");
+    } catch (err) { notify(errText(err), true); }
+  };
+
   const sendMessage = async () => {
     const trimmed = message.trim();
     if (!trimmed || loadingChat || !activeId) return;
@@ -325,8 +345,9 @@ export default function Home() {
     setArea("chat");
     setLoadingChat(true);
     try {
-      const r = await api<{ reply: string }>("/api/chat", { method: "POST", body: JSON.stringify({ message: trimmed, engagement_id: activeId }) });
+      const r = await api<{ reply: string; context?: CtxInfo }>("/api/chat", { method: "POST", body: JSON.stringify({ message: trimmed, engagement_id: activeId }) });
       setChat((c) => [...c, { role: "assistant", content: r.reply, created_at: nowClock() }]);
+      if (r.context) setCtxInfo(r.context);
       // A chat-triggered scan adds a target / tool run: refresh the panels and counts.
       if (r.reply.startsWith("**Ran `")) loadWorkspace(activeId);
     } catch (err) {
@@ -361,7 +382,8 @@ export default function Home() {
     const f = new FormData(e.currentTarget);
     const key = String(f.get("api_key") ?? "");
     try {
-      await api("/api/providers", { method: "PUT", body: JSON.stringify({ name: existing?.name ?? String(f.get("name")).trim(), base_url: String(f.get("base_url")).trim(), model: String(f.get("model")).trim(), api_key: key === "" && existing?.hasKey ? "***" : key }) });
+      await api("/api/providers", { method: "PUT", body: JSON.stringify({ name: existing?.name ?? String(f.get("name")).trim(), base_url: String(f.get("base_url")).trim(), model: String(f.get("model")).trim(), api_key: key === "" && existing?.hasKey ? "***" : key, context_tokens: Number(f.get("context_tokens")) || null }) });
+      refreshCtx();
       setModal(null);
       await loadProviders();
       notify("Provider saved");
@@ -526,7 +548,7 @@ export default function Home() {
               )}
 
               {shown && area === "overview" && <Overview navigate={navigate} findings={findings} targets={targets} runs={runs} allowedTools={allowedTools} provider={activeProviderData} />}
-              {shown && area === "chat" && <ChatPanel chat={chat} message={message} setMessage={setMessage} onSend={sendMessage} loading={loadingChat} provider={activeProviderData} counts={{ targets: targets.length, findings: findings.length, runs: runs.length }} hasScope={!!shown.scope_notes.trim()} />}
+              {shown && area === "chat" && <ChatPanel chat={chat} message={message} setMessage={setMessage} onSend={sendMessage} loading={loadingChat} provider={activeProviderData} counts={{ targets: targets.length, findings: findings.length, runs: runs.length }} hasScope={!!shown.scope_notes.trim()} ctx={ctxInfo} onClear={clearChat} />}
               {shown && area === "targets" && <TargetsPanel targets={filteredTargets} runs={runs} allowedTools={allowedTools} search={search} setSearch={setSearch} runTool={runTool} running={runningTarget} onAdd={() => setModal({ type: "target" })} onDelete={deleteTarget} onSaveFinding={(r, t) => setModal({ type: "finding", title: `${r.tool} result: ${t.value}`, evidence: r.output.slice(0, 4000) })} />}
               {shown && area === "findings" && <FindingsPanel findings={filteredFindings} search={search} setSearch={setSearch} onAdd={() => setModal({ type: "finding" })} onEdit={(f) => setModal({ type: "finding", finding: f })} onDelete={deleteFinding} onStatus={setFindingStatus} />}
               {shown && area === "scope" && <ScopePanel draft={scopeDraft} setDraft={setScopeDraft} save={saveScope} engagementId={shown.id} targetCount={targets.length} allowedTools={allowedTools} />}
@@ -655,7 +677,7 @@ function ActivityItem({ icon: Icon, tone, time, title, detail }: { icon: LucideI
 }
 
 /* ------------------------------------------------------------------- Chat */
-function ChatPanel({ chat, message, setMessage, onSend, loading, provider, counts, hasScope }: { chat: ChatMessage[]; message: string; setMessage: (m: string) => void; onSend: () => void; loading: boolean; provider: Provider | null; counts: { targets: number; findings: number; runs: number }; hasScope: boolean }) {
+function ChatPanel({ chat, message, setMessage, onSend, loading, provider, counts, hasScope, ctx, onClear }: { ctx: CtxInfo | null; onClear: () => void; chat: ChatMessage[]; message: string; setMessage: (m: string) => void; onSend: () => void; loading: boolean; provider: Provider | null; counts: { targets: number; findings: number; runs: number }; hasScope: boolean }) {
   const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const box = end.current?.parentElement;
@@ -682,7 +704,7 @@ function ChatPanel({ chat, message, setMessage, onSend, loading, provider, count
         </div>
         <div className="chat-composer">
           <textarea value={message} onChange={(e) => setMessage(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); } }} placeholder="Ask about this engagement…" rows={2} />
-          <div className="composer-foot"><span><kbd>↵</kbd> send <kbd>⇧ ↵</kbd> new line</span><button className="send-button" disabled={!message.trim() || loading} onClick={onSend}><Send size={15} /></button></div>
+          <div className="composer-foot"><span><kbd>↵</kbd> send <kbd>⇧ ↵</kbd> new line{ctx?.budget ? <span className="ctx-meter" title={ctx.note || ctx.source}> · context {ctx.used ? `≈${(ctx.used / 1000).toFixed(1)}k / ` : ""}{(ctx.budget / 1000).toFixed(1)}k ({ctx.source}){ctx.dropped_turns ? ` · ${ctx.dropped_turns} old turns condensed` : ""}</span> : null}{chat.length > 0 && <button type="button" className="link-button" onClick={onClear}> · clear chat</button>}</span><button className="send-button" disabled={!message.trim() || loading} onClick={onSend}><Send size={15} /></button></div>
         </div>
       </section>
       <aside className="chat-sidebar">
@@ -910,6 +932,7 @@ function ProviderModal({ provider, onClose, onSubmit }: { provider?: Provider; o
         {!provider && <label>Name<input name="name" defaultValue={v("name")} placeholder="ollama-gemma" required /></label>}
         <label>Base URL<input name="base_url" defaultValue={v("base_url")} placeholder="http://localhost:11434/v1" required /></label>
         <label>Model id<input name="model" defaultValue={v("model")} placeholder="exact id shown by your server" required /></label>
+        <label>Context tokens (blank = auto-detect; Ollama default 8192)<input name="context_tokens" type="number" min={1024} step={1024} defaultValue={provider?.context_tokens ?? ""} placeholder="auto" /></label>
         <label>API key {provider?.hasKey ? "(leave blank to keep the saved key)" : "(blank for local servers)"}<input name="api_key" type="password" autoComplete="off" /></label>
         <div className="modal-actions"><button type="button" className="quiet-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button"><Check size={15} /> Save provider</button></div>
       </form>
